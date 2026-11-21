@@ -22,8 +22,9 @@ public class Experiments {
     private static final int PILOT_RUNS = 4;
     private static final int VERIFICATION_RUNS = 20;
     private static final double STEP = 1_000;
-    private static final double HORIZON = 400_000;
-    private static final double DURATION = 200_000;
+    private static final double HORIZON = 200_000;
+    private static final double DURATION = 100_000;
+    private static final double TRANSIENT_ACCURACY = 0.10;
     private static final double RELATIVE_ACCURACY = 0.05;
     private static final int COMPLEX = 2;
 
@@ -166,7 +167,7 @@ public class Experiments {
     }
 
     private static void configurations(ServiceCentre base, int runs, double warmup) throws IOException {
-        List<String> rows = new ArrayList<>(List.of("channels;W;W_hw;V;V_hw;throughput;U1;U2;U3;V1;V2"));
+        List<String> rows = new ArrayList<>(List.of("channels;W;W_hw;V;V_hw;throughput;U1;U2;U3;V1;V2;W1;W2"));
         for (int[] channels : new int[][]{{1, 2, 4}, {1, 2, 5}, {2, 2, 4}, {2, 2, 5}}) {
             ServiceCentre centre = base.copy();
             centre.setChannels(channels);
@@ -184,6 +185,10 @@ public class Experiments {
             for (int type = 1; type <= centre.types(); type++) {
                 int t = type;
                 row.append(format(";%.4f", Statistics.mean(Statistics.values(results, r -> r.getSojournByType().get(t)))));
+            }
+            for (int type = 1; type <= centre.types(); type++) {
+                int t = type;
+                row.append(format(";%.4f", Statistics.mean(Statistics.values(results, r -> r.getWaitingByType().get(t)))));
             }
             rows.add(row.toString());
             Logger.info("Конфігурація %s", row);
@@ -223,7 +228,7 @@ public class Experiments {
                 RESULTS.resolve("transient-" + variant + ".png"));
 
         double last = traces.stream().mapToDouble(trace -> response.applyAsDouble(trace[trace.length - 1])).average().orElseThrow();
-        double accuracy = RELATIVE_ACCURACY * last;
+        double accuracy = TRANSIENT_ACCURACY * last;
         double settling = settlingTime(traces, response, accuracy);
         Logger.info("Перехідний період (%s): y(T=%.0f) = %.3f хв, eps = %.3f хв, T = %.0f хв",
                 variant, HORIZON, last, accuracy, settling);

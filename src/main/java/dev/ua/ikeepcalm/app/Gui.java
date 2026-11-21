@@ -222,7 +222,7 @@ public class Gui extends JFrame {
         admins.setText(String.valueOf(centre.getChannels()[ServiceCentre.REGISTRATION]));
         consultants.setText(String.valueOf(centre.getChannels()[ServiceCentre.CONSULTATION]));
         windows.setText(String.valueOf(centre.getChannels()[ServiceCentre.PROCESSING]));
-        warmup.setText("5000");
+        warmup.setText("42000");
         duration.setText("100000");
         runs.setText("10");
         types.setRowCount(0);

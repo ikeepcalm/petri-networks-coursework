@@ -6,7 +6,7 @@ import dev.ua.ikeepcalm.util.Logger;
 public class Main {
 
     private static final long SEED = 1;
-    private static final double WARMUP = 5_000;
+    private static final double WARMUP = 42_000;
     private static final double DURATION = 100_000;
 
     static void main() {
