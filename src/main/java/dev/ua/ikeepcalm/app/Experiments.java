@@ -1,7 +1,7 @@
 package dev.ua.ikeepcalm.app;
 
-import dev.ua.ikeepcalm.petri.components.PetriNet;
 import dev.ua.ikeepcalm.petri.ServiceCentre;
+import dev.ua.ikeepcalm.petri.components.PetriNet;
 import dev.ua.ikeepcalm.petri.components.Simulation;
 import dev.ua.ikeepcalm.util.Charts;
 import dev.ua.ikeepcalm.util.Logger;
@@ -50,6 +50,8 @@ public class Experiments {
         Logger.info("Період розгону для всіх експериментів: T = %.0f хв", warmup);
         Logger.stage("Верифікація");
         verification(base, warmup);
+        Logger.stage("Верифікація: варіювання по одній змінній");
+        sensitivity(base, warmup);
         Logger.stage("Кількість прогонів");
         int runs = replications(base, warmup);
         Logger.stage("Регресійний аналіз");
@@ -103,6 +105,76 @@ public class Experiments {
             }
         }
         Files.write(RESULTS.resolve("verification.csv"), rows);
+    }
+
+    private static void sensitivity(ServiceCentre base, double warmup) throws IOException {
+        Map<String, ServiceCentre> variants = new LinkedHashMap<>();
+        variants.put("base", base);
+        for (double tau : new double[]{1.8, 2.2}) {
+            ServiceCentre centre = base.copy();
+            centre.setInterarrivalMean(tau);
+            variants.put(format("tau=%.1f", tau), centre);
+        }
+        for (double share : new double[]{0.2, 0.4}) {
+            ServiceCentre centre = base.copy();
+            centre.setShareOf(COMPLEX, share);
+            variants.put(format("q2=%.1f", share), centre);
+        }
+        for (int node = 0; node < ServiceCentre.NODES.length; node++) {
+            ServiceCentre centre = base.copy();
+            centre.getChannels()[node]++;
+            variants.put(format("m%d=%d", node + 1, centre.getChannels()[node]), centre);
+        }
+        for (int node = 0; node < ServiceCentre.NODES.length; node++) {
+            for (int type = 1; type <= base.types(); type++) {
+                for (double factor : new double[]{0.8, 1.2}) {
+                    ServiceCentre centre = base.copy();
+                    centre.getServiceMeans()[type - 1][node] *= factor;
+                    variants.put(format("d%d%d=%.2f", node + 1, type, centre.getServiceMeans()[type - 1][node]), centre);
+                }
+            }
+        }
+
+        double[][] consult = {{0.1, 0.3}, {0.4, 0.8}};
+        double[][] back = {{0.05, 0.15}, {0.1, 0.3}};
+        for (int type = 1; type <= base.types(); type++) {
+            for (double value : consult[type - 1]) {
+                ServiceCentre centre = base.copy();
+                centre.getConsultProbability()[type - 1] = value;
+                variants.put(format("a%d=%.2f", type, value), centre);
+            }
+        }
+        for (int type = 1; type <= base.types(); type++) {
+            for (double value : back[type - 1]) {
+                ServiceCentre centre = base.copy();
+                centre.getReturnProbability()[type - 1] = value;
+                variants.put(format("g%d=%.2f", type, value), centre);
+            }
+        }
+
+        List<String> rows = new ArrayList<>(List.of("variant;quantity;simulated;halfWidth;theory"));
+        for (Map.Entry<String, ServiceCentre> variant : variants.entrySet()) {
+            ServiceCentre centre = variant.getValue();
+            String name = variant.getKey();
+            List<ServiceCentre.Result> results = ServiceCentre.replicate(centre, VERIFICATION_RUNS, warmup, DURATION);
+            rows.add(row(name, "W", results, WAITING, Double.NaN));
+            rows.add(row(name, "V", results, SOJOURN, Double.NaN));
+            for (int type = 1; type <= centre.types(); type++) {
+                int t = type;
+                rows.add(row(name, "W" + type, results, r -> r.getWaitingByType().get(t), Double.NaN));
+                rows.add(row(name, "V" + type, results, r -> r.getSojournByType().get(t), Double.NaN));
+            }
+            for (int node = 0; node < ServiceCentre.NODES.length; node++) {
+                int n = node;
+                rows.add(row(name, "Wq" + (node + 1), results, r -> r.getQueueWaiting()[n], Double.NaN));
+                rows.add(row(name, "U" + (node + 1), results, r -> r.getUtilisation()[n], centre.offeredUtilisation(node)));
+            }
+            rows.add(row(name, "throughput", results, ServiceCentre.Result::getThroughput, 1 / centre.getInterarrivalMean()));
+            rows.add(row(name, "consultShare", results, ServiceCentre.Result::getConsultShare, consultShareTheory(centre)));
+            rows.add(row(name, "returnShare", results, ServiceCentre.Result::getReturnShare, returnShareTheory(centre)));
+            Logger.info("Варіант %s", name);
+        }
+        Files.write(RESULTS.resolve("sensitivity.csv"), rows);
     }
 
     private static String row(String variant, String quantity, List<ServiceCentre.Result> results,

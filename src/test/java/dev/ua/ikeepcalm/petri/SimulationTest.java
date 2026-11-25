@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SimulationTest {
+
     private static final double EPS = 1e-9;
 
     static PetriNet singleServer(Delay arrival, Delay service, int servers) {
